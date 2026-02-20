@@ -12,57 +12,61 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all release Excel assets
-        uses: dsaltares/fetch-gh-release-asset@master
-        with:
-          version: ${{ github.event.release.tag_name }}
-          regex: ".*\\.xlsx"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          
+      # Download alle Excel-assets van deze release
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download ${{ github.event.release.tag_name }} --pattern "*.xlsx"
+
+      # Controleer dat er precies 2 Excelbestanden zijn
       - name: Validate exactly two Excel files
         run: |
-          COUNT=$(ls *.xlsx | wc -l)
+          COUNT=$(ls *.xlsx 2>/dev/null | wc -l)
           if [ "$COUNT" -ne 2 ]; then
             echo "Er moeten precies 2 Excelbestanden in de release zitten."
             exit 1
           fi
 
+      # Sorteer en hernoem
       - name: Sort and rename files
         run: |
-          # Sorteer op bestandsnaam (YYYYMMDD HHMM ...)
           FILES=($(ls *.xlsx | sort))
           echo "Oud bestand: ${FILES[0]}"
           echo "Nieuw bestand: ${FILES[1]}"
 
-          # Onthoud originele namen voor delete-stap
+          # Bewaar originele namen voor delete-stap
           echo "OLD_ASSET=${FILES[0]}" >> $GITHUB_ENV
           echo "NEW_ASSET=${FILES[1]}" >> $GITHUB_ENV
 
-          # Hernoem voor het script
           mv "${FILES[0]}" oud.xlsx
           mv "${FILES[1]}" nieuw.xlsx
 
+      # Python installeren
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.11
 
+      # Dependencies installeren
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # WKPB script uitvoeren
       - name: Run WKPB script
         run: python wkpb_core.py
 
+      # Resultaat uploaden naar dezelfde release
       - name: Upload result to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: wkpb_werklijst_*.xlsx
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.event.release.tag_name }} wkpb_werklijst_*.xlsx --clobber
 
+      # Originele input-assets verwijderen
       - name: Delete input assets from release
-        uses: mknejp/delete-release-assets@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.event.release.tag_name }}
-          assets: |
-            ${{ env.OLD_ASSET }}
-            ${{ env.NEW_ASSET }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete-asset ${{ github.event.release.tag_name }} "$OLD_ASSET" --yes
+          gh release delete-asset ${{ github.event.release.tag_name }} "$NEW_ASSET" --yes
