@@ -18,7 +18,7 @@ jobs:
           version: ${{ github.event.release.tag_name }}
           pattern: "*.xlsx"
           token: ${{ secrets.GITHUB_TOKEN }}
-
+          
       - name: Validate exactly two Excel files
         run: |
           COUNT=$(ls *.xlsx | wc -l)
