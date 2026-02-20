@@ -3,8 +3,13 @@ from datetime import datetime
 import sys
 
 WKPB_KOLOMMEN = [
-    "identificatie", "monumentnummer", "register", "kenmerk",
-    "kadastraleGemeenteBRK", "sectieBRK", "perceelnummerBRK"
+    "identificatie",
+    "monumentnummer",
+    "register",
+    "kenmerk",
+    "kadastraleGemeenteBRK",
+    "sectieBRK",
+    "perceelnummerBRK"
 ]
 
 ACTIEF_KOLOM = "indicatieObjectVervallenBRK"
@@ -13,6 +18,7 @@ ACTIEF_KOLOM = "indicatieObjectVervallenBRK"
 def controleer_kolommen(df):
     vereiste = WKPB_KOLOMMEN + [ACTIEF_KOLOM]
     ontbrekend = [k for k in vereiste if k not in df.columns]
+
     if ontbrekend:
         print(f"Ontbrekende kolommen: {', '.join(ontbrekend)}")
         sys.exit(1)

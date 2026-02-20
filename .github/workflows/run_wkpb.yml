@@ -1,27 +1,26 @@
 name: WKPB Diff
 
-# Start workflow automatisch zodra een release wordt gepubliceerd
+# Trigger wanneer bestaande release wordt aangepast
 on:
   release:
-    types: [published]
+    types: [edited]
 
 jobs:
   run-wkpb:
     runs-on: ubuntu-latest
 
     steps:
-      # Haal repository op
       - uses: actions/checkout@v4
 
-      # Download alle .xlsx bestanden uit de release
-      - name: Download release assets
+      # Download alle Excel-assets uit vaste release
+      - name: Download Excel assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download ${{ github.event.release.tag_name }} --pattern "*.xlsx" || true
+          gh release download wkpb --pattern "*.xlsx" || true
 
-      # Controleer dat er precies 2 Excelbestanden zijn geüpload
-      - name: Validate exactly two Excel files
+      # Controleer dat er precies 2 Excelbestanden zijn
+      - name: Validate file count
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -30,67 +29,62 @@ jobs:
           if [ "$COUNT" -ne 2 ]; then
             DATUM=$(date +%Y%m%d)
 
-            gh release edit ${{ github.event.release.tag_name }} \
+            gh release edit wkpb \
               --title "WKPB MISLUKT $DATUM" \
-              --notes "Verwerking mislukt. Er moeten precies 2 Excelbestanden (.xlsx) worden geüpload. Huidig aantal: $COUNT"
+              --notes "Verwerking mislukt. Upload exact 2 Excelbestanden (.xlsx). Huidig aantal: $COUNT"
 
             exit 1
           fi
 
-      # Sorteer bestanden op naam (YYYYMMDD HHMM ...) en hernoem naar oud.xlsx / nieuw.xlsx
-      - name: Sort and rename files
+      # Sorteer op naam en hernoem
+      - name: Sort and rename
         run: |
           FILES=($(ls *.xlsx | sort))
-
           echo "OLD_ASSET=${FILES[0]}" >> $GITHUB_ENV
           echo "NEW_ASSET=${FILES[1]}" >> $GITHUB_ENV
-
           mv "${FILES[0]}" oud.xlsx
           mv "${FILES[1]}" nieuw.xlsx
 
-      # Installeer Python
       - uses: actions/setup-python@v5
         with:
           python-version: 3.11
 
-      # Installeer dependencies
       - run: pip install -r requirements.txt
 
-      # Voer WKPB script uit met foutafhandeling
-      - name: Run WKPB script
+      # Run Python
+      - name: Run WKPB
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if ! python wkpb_core.py; then
             DATUM=$(date +%Y%m%d)
 
-            gh release edit ${{ github.event.release.tag_name }} \
+            gh release edit wkpb \
               --title "WKPB MISLUKT $DATUM" \
-              --notes "Verwerking mislukt tijdens Python-validatie. Controleer kolommen en bestandsstructuur."
+              --notes "Verwerking mislukt tijdens validatie. Controleer kolommen."
 
             exit 1
           fi
 
-      # Upload gegenereerd resultaat naar dezelfde release
-      - name: Upload result to release
+      # Upload resultaat
+      - name: Upload result
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ github.event.release.tag_name }} wkpb_werklijst_*.xlsx --clobber
+          gh release upload wkpb wkpb_werklijst_*.xlsx --clobber
 
-      # Verwijder originele inputbestanden uit de release
+      # Verwijder originele input
       - name: Delete input assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete-asset ${{ github.event.release.tag_name }} "$OLD_ASSET" --yes
-          gh release delete-asset ${{ github.event.release.tag_name }} "$NEW_ASSET" --yes
+          gh release delete-asset wkpb "$OLD_ASSET" --yes
+          gh release delete-asset wkpb "$NEW_ASSET" --yes
 
-      # Pas titel aan bij succesvolle verwerking
-      - name: Update release title on success
+      # Succes-titel
+      - name: Update success title
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DATUM=$(date +%Y%m%d)
-          gh release edit ${{ github.event.release.tag_name }} \
-            --title "WKPB werklijst $DATUM"
+          gh release edit wkpb --title "WKPB werklijst $DATUM"
