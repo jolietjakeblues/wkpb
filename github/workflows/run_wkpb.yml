@@ -1,0 +1,61 @@
+name: WKPB Diff
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  run-wkpb:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all release Excel assets
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          version: ${{ github.event.release.tag_name }}
+          pattern: "*.xlsx"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate exactly two Excel files
+        run: |
+          COUNT=$(ls *.xlsx | wc -l)
+          if [ "$COUNT" -ne 2 ]; then
+            echo "Er moeten precies 2 Excelbestanden in de release zitten."
+            exit 1
+          fi
+
+      - name: Sort and rename files
+        run: |
+          # Sorteer op bestandsnaam (YYYYMMDD HHMM ...)
+          FILES=($(ls *.xlsx | sort))
+          echo "Oud bestand: ${FILES[0]}"
+          echo "Nieuw bestand: ${FILES[1]}"
+          mv "${FILES[0]}" oud.xlsx
+          mv "${FILES[1]}" nieuw.xlsx
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run WKPB script
+        run: python wkpb_core.py
+
+      - name: Upload result to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: wkpb_werklijst_*.xlsx
+
+      - name: Delete input assets from release
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.release.tag_name }}
+          assets: |
+            *.xlsx
